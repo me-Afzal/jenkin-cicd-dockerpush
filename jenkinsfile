@@ -1,0 +1,77 @@
+pipeline {
+    agent {
+        label 'docker-python-docker-agent'
+    }
+
+    options {
+        timestamps()
+    }
+
+    triggers {
+        pollSCM('H/2 * * * *')
+    }
+
+    environment {
+        PYTHONUNBUFFERED = 1
+        IMAGE_NAME = 'afzal23/jenkins-fastapi-app' // Change this to your Docker Hub repo
+        IMAGE_TAG = 'latest'
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'pip install --upgrade pip'
+                sh 'pip install --user -r requirements.txt'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh '''
+                export PATH=$HOME/.local/bin:$PATH
+                set -e
+                python -m pytest test_app.py 2>&1 | tee pytest.log
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                docker build -t $IMAGE_NAME:$IMAGE_TAG .
+                '''
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker push $IMAGE_NAME:$IMAGE_TAG
+                    docker logout
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'pytest.log', onlyIfSuccessful: false
+            echo '📦 Pipeline execution completed.'
+        }
+        success {
+            echo '✅ Tests passed and Docker image pushed!'
+        }
+        failure {
+            echo '❌ Something failed. Check logs.'
+        }
+    }
+}
