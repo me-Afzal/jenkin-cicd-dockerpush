@@ -13,7 +13,7 @@ pipeline {
 
     environment {
         PYTHONUNBUFFERED = 1
-        IMAGE_NAME = 'afzal23/jenkins-fastapi-app' // Change this to your Docker Hub repo
+        IMAGE_NAME = 'afzal23/jenkins-fastapi-app'
         IMAGE_TAG = 'latest'
     }
 
@@ -26,15 +26,19 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'pip install --upgrade pip'
-                sh 'pip install --user -r requirements.txt'
+                sh '''
+                python -m venv venv
+                source venv/bin/activate
+                pip install --upgrade pip
+                pip install -r requirements.txt
+                '''
             }
         }
 
         stage('Run Tests') {
             steps {
                 sh '''
-                export PATH=$HOME/.local/bin:$PATH
+                source venv/bin/activate
                 set -e
                 python -m pytest test_app.py 2>&1 | tee pytest.log
                 '''
